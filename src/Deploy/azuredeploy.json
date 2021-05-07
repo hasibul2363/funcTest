@@ -1,0 +1,112 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "env": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "tst",
+        "acc",
+        "prd"
+      ],
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    }
+  },
+  "variables": {
+    "azFunctionHostingPlanName": "hasibHp",
+    "azFunctionStorageName": "hasibst",
+    "azFunctionAppName": "hasibFn",
+    "AspNetCoreEnvironment": "[if(equals(parameters('env'), 'prd'), 'Production', if(equals(parameters('env'), 'acc'), 'Acceptance', 'Test'))]"
+  },
+  "resources": [
+    {
+      "comments": "consumption plan for custommade-order functions",
+      "type": "Microsoft.Web/serverfarms",
+      "sku": {
+        "name": "Y1",
+        "tier": "Dynamic",
+        "size": "Y1",
+        "family": "Y",
+        "capacity": 0
+      },
+      "kind": "functionapp",
+      "name": "[variables('azFunctionHostingPlanName')]",
+      "apiVersion": "2016-09-01",
+      "location": "[resourceGroup().location]",
+      "scale": null,
+      "properties": {
+        "name": "[variables('azFunctionHostingPlanName')]",
+        "perSiteScaling": false,
+        "reserved": false,
+        "targetWorkerCount": 0,
+        "targetWorkerSizeId": 0
+      },
+      "dependsOn": []
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      },
+      "kind": "StorageV2",
+      "name": "[variables('azFunctionStorageName')]",
+      "apiVersion": "2018-07-01",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "virtualNetworkRules": [],
+          "ipRules": [],
+          "defaultAction": "Allow"
+        },
+        "supportsHttpsTrafficOnly": false
+      }
+    },
+    {
+      "apiVersion": "2015-08-01",
+      "name": "[variables('azFunctionAppName')]",
+      "type": "Microsoft.Web/sites",
+      "kind": "functionapp",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('azFunctionHostingPlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('azFunctionStorageName'))]"
+      ],
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('azFunctionHostingPlanName'))]",
+        "siteConfig": {
+          "appSettings": [
+            {
+              "name": "ASPNETCORE_ENVIRONMENT",
+              "value": "[variables('AspNetCoreEnvironment')]"
+            },
+            {
+              "name": "AZURE_FUNCTIONS_ENVIRONMENT",
+              "value": "[variables('AspNetCoreEnvironment')]"
+            },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('azFunctionStorageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('azFunctionStorageName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value)]"
+            },
+            {
+              "name": "AzureWebJobsDashboard",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('azFunctionStorageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('azFunctionStorageName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value)]"
+            },
+            {
+              "name": "FUNCTIONS_EXTENSION_VERSION",
+              "value": "~3"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {}
+}
